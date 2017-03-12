@@ -83,7 +83,7 @@
 	
 	// returns the inumber corresponding to this filename
 	public short namei(String filename) {
-		for (short i = 0; i < fsize.length; i++) // length of fize == max num files
+		for (short i = 0; i < fnames.length; i++) 
 		{
 			if (fnames[i].length > 0)
 			{
