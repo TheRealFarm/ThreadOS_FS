@@ -79,13 +79,16 @@ public class Kernel
                   // instantiate and start a disk
                   disk = new Disk( 1000 );
                   disk.start( );
-
+                  
                   // instantiate a cache memory
                   cache = new Cache( disk.blockSize, 10 );
+                  
 
                   // instantiate synchronized queues
                   ioQueue = new SyncQueue( );
                   waitQueue = new SyncQueue( scheduler.getMaxThreads( ) );
+                  
+                  fs = new FileSystem(1000);
                   return OK;
                case EXEC:
                   return sysExec( ( String[] )args );
@@ -155,7 +158,12 @@ public class Kernel
                         System.out.println( "threaOS: caused read errors" );
                         return ERROR;
                   }
-                  // return FileSystem.read( param, byte args[] );
+                  if ((myTcb = scheduler.getMyTcb()) != null)
+                  {
+                	  FileTableEntry ftEnt = myTcb.getFtEnt(param);
+                	  if(ftEnt != null)
+                		  return fs.read(ftEnt, (byte[])args);
+                  }
                   return ERROR;
                case WRITE:
                   switch ( param ) {
@@ -164,12 +172,18 @@ public class Kernel
                         return ERROR;
                      case STDOUT:
                         System.out.print( (String)args );
-                        break;
+                        return OK;
                      case STDERR:
                         System.err.print( (String)args );
-                        break;
+                        return OK;
                   }
-                  return OK;
+                  if((myTcb = scheduler.getMyTcb()) != null)
+                  {
+                	  FileTableEntry ftEnt = myTcb.getFtEnt(param);
+                	  if(ftEnt != null)
+                		  return fs.write(ftEnt, (byte[])args);
+                  }
+                  return ERROR;
                case CREAD:   // to be implemented in assignment 4
                   return cache.read( param, ( byte[] )args ) ? OK : ERROR;
                case CWRITE:  // to be implemented in assignment 4
