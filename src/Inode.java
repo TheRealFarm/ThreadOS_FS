@@ -41,6 +41,7 @@ public class Inode {
 		indirect = SysLib.bytes2short(inodeBlock, offset);
 	}
 	
+	// writes an inode back to the disk given the inode number
 	int toDisk(short iNumber) {
 		byte[] inodeData = new byte[iNodeSize];
 		
@@ -72,30 +73,14 @@ public class Inode {
 		return SysLib.rawwrite(iNodeBlockNum, inodeBlock);
 	}
 	
+	// return pointer to indirect block
 	int findIndexBlock() {
 		return indirect;
 	}
 	
-	int findTargetBlock(int offset) {
-		SysLib.cerr("Finding target block..\n");
-		SysLib.cerr("offset = " + offset + "\n");
-		int i = offset / Disk.blockSize;
-		if (i < 11)
-		{
-			SysLib.cerr("direct[i] = " + direct[i] + "\n");
-			return direct[i];
-		}
-		else if (indirect == -1)
-			return -1;
-		
-		byte[] blockData = new byte[Disk.blockSize];
-		SysLib.rawread(indirect, blockData);
-		int j = i - directSize;
-		SysLib.cerr("Found: " + j);
-		short a = SysLib.bytes2short(blockData, j * 2);
-		return a;
-	}
-	
+	// sets an index block from the block number with all indices starting at -1.
+	// if all of the direct pointers are not in use or the indirect pointer is in use already then false is returned
+	// otherwise the index block is written to the disk and true returned
 	boolean setIndexBlock(short blockNumber) {
 		// check if direct pointers are all used
 		for (int i = 0; i < 11; i++)
@@ -117,33 +102,63 @@ public class Inode {
 		return true;
 	}
 	
+	// finds the target block given the offset into the file
+	// if the target block is not within the scope of the direct pointers, the indirection
+	// block is read to find the index which points to the block
+	int findTargetBlock(int offset) {
+		//SysLib.cerr("Finding target block..\n");
+		//SysLib.cerr("offset = " + offset + "\n");
+		int i = offset / Disk.blockSize;
+		if (i < 11)
+		{
+			//SysLib.cerr("direct[i] = " + direct[i] + "\n");
+			return direct[i];
+		}
+		else if (indirect == -1)
+			return -1;
+		
+		byte[] blockData = new byte[Disk.blockSize];
+		SysLib.rawread(indirect, blockData);
+		int j = i - directSize;
+		//SysLib.cerr("Found: " + j);
+		return SysLib.bytes2short(blockData, j * 2);
+		
+	}
+	
+	// gets the offset into the file and the blockNumber to be pointed to
+	// if the offset is beyond the scope of the direct pointers, then the indirect pointer is used
+	// returns 0 on successfully writing one of the pointers to the block number passed in
+	// if the there is an error in the direct pointer array, -1 or -2 is returned depending on the error
+	// if the indirect pointer is null, -3 is returned to tell the file system to set the index block
 	int setTargetBlock(int offset, short blockNumber) {
 		int i = offset / Disk.blockSize;
 		if (i < 11)
 		{
-			if (direct[i] >= 0)
+			if (direct[i] >= 0) // block has been set already
 				return -1;
-			if ((i > 0) && direct[i-1] == -1)
+			if ((i > 0) && direct[i-1] == -1) // previous block in direct pointers is unused
 				return -2;
 			direct[i] = blockNumber;
 			return 0;
 		}
-		if (indirect == -1)
+		if (indirect == -1) // null indirect pointer
 			return -3;
 		
-		byte[] indexBlock = new byte[Disk.blockSize / 2];
+		byte[] indexBlock = new byte[Disk.blockSize];
 		SysLib.rawread(indirect, indexBlock);
-		int j = i - 11;
-		if (SysLib.bytes2short(indexBlock, j * 2) > 0)
+		int j = i - 11; // index in indirect block
+		if (SysLib.bytes2short(indexBlock, j * 2) > 0) // index is in use
 		{
 			SysLib.cerr("indexBlock, indirectNumber = " + j + " contents = " + SysLib.bytes2short(indexBlock, j * 2) +"\n");
 			return -1;
 		}
+		// put the index in the block with the block number
 		SysLib.short2bytes(blockNumber, indexBlock, j * 2);
 		SysLib.rawwrite(indirect, indexBlock);
 		return 0;
 	}
 	
+	// returns the index block to FileSystem.java for deallocation if the indirect pointer is in use
 	byte[] freeIndexBlock() {
 		if (indirect >= 0)
 		{

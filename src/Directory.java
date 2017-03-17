@@ -72,12 +72,13 @@
 	// deallocates this inumber
 	// corresponding file will be deleted
 	public boolean ifree(short iNumber) {
-		// iNumber cant be 0 or less, greater than maxInodes, and the file size cant be 0 already
-		if (iNumber <= 0 || iNumber > fsize.length || fsize[iNumber] == 0)
-			return false;
-		
-		fsize[iNumber] = 0;
-		return true;
+		// if the inumber is greater than 0, it is a valid entry in the directroy
+		if(fsize[iNumber] > 0)
+		{
+			fsize[iNumber] = 0;
+			return true;
+		}
+		return false;
 		
 	}
 	
@@ -87,7 +88,7 @@
 		{
 			if (fnames[i].length > 0)
 			{
-				String file = new String(fnames[i]);
+				String file = new String(fnames[i], 0, fsize[i]);
 				if (file.equals(filename))
 					return i;
 			}

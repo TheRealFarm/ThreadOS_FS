@@ -23,22 +23,23 @@ public class FileTable {
 		Inode inode;
 		short iNumber = filename.equals("/") ? 0 : dir.namei(filename);
 		
-		while (true) {
-			if (iNumber >= 0) {
+		if (iNumber >= 0) {
+			while (true) {
 				inode = new Inode(iNumber);
 				if (mode.equals("r")) { // requesting read
-					if (inode.flag == WRITE) // wait for write to exit
+					if (inode.flag == UNUSED || inode.flag == READ) // file is able to be read
 					{
+						inode.flag = READ; // set flag to read and break
+						break;
+				
+					}
+					else { // file is in use or being written 
 						try {
 							wait();
 						} catch (InterruptedException e) {
 							// TODO Auto-generated catch block
 							e.printStackTrace();
 						}
-					}
-					else { // file is able to be read
-						inode.flag = READ; // set flag to read and break
-						break;
 					}
 				}
 				else { // requesting write/append
@@ -47,7 +48,7 @@ public class FileTable {
 						inode.flag = WRITE;
 						break;
 					}
-					else // file is being read/written so wait
+					else if (inode.flag == READ || inode.flag == WRITE) // file is being read/written so wait
 					{
 						try {
 							wait();
@@ -58,15 +59,16 @@ public class FileTable {
 					}
 				}
 			}
-			else {
-				if (mode.equals("r")) // cannot read from nonexistent file
-					return null;
-				inode = new Inode();
-				iNumber = dir.ialloc(filename);
-				
-				if (iNumber < 0) // out of file space
-					return null;
-			}
+		}
+		else {
+			if (mode.equals("r")) // cannot read from nonexistent file
+				return null;
+			// write operation
+			inode = new Inode();
+			iNumber = dir.ialloc(filename);
+			inode.flag = WRITE;
+			if (iNumber < 0) // out of file space
+				return null;
 		}
 		
 		inode.count++;
@@ -81,20 +83,16 @@ public class FileTable {
 	// free this file table entry
 	// return true if this file table entry found in the table
 	public synchronized boolean ffree(FileTableEntry e) {
-		Inode inode = new Inode(e.iNumber);
 		if (table.remove(e)) 
 		{
-			e.inode.toDisk(e.iNumber);
 			e.inode.count--;
-			if (inode.flag == READ || inode.flag == WRITE)
+			if (e.inode.flag == READ || e.inode.flag == WRITE)
 			{
-				if (e.inode.count > 0)
-					e.inode.flag = USED;
-				else
-					e.inode.flag = UNUSED;
-				notify();
+				e.inode.flag = UNUSED;
 			}
-			
+			e.inode.toDisk(e.iNumber);
+			e = null;
+			notify();
 			return true;
 		}
 		return false;
